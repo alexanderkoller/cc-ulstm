@@ -15,10 +15,14 @@ chart[:,2,:] = torch.rand(bs, 2*hd)
 
 model = SequentialChart(hd)
 
+for param in model.parameters():
+    print(type(param.data), param.size())
 
-operations = [[(0,1), (0,1), (0,1)], [(1,2), (1,2), (1,2)], [(0,4), (0,4), (0,4)]]
 
-result = model.forward(chart, operations, 3)
+operations = [[[(0,1)], [(0,1)], [(0,1)]], [[(1,2)], [(1,2)], [(1,2)]], [[(0,4),(3,2)], [(0,4),(0,0)], [(0,4),(0,0)]]] # TODO - dealing with diff ambiguity?
+
+result = model(chart, operations, 3)
+
 print(result)
-print(result.size())
+# print(result.size())
 
