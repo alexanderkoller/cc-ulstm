@@ -1,4 +1,5 @@
 import json
+import sys
 import time
 
 import nltk
@@ -218,26 +219,11 @@ with open(train_file) as f:
             break
 
 
-
 # set up model and optimizer
 model = SnliModel(10, 100, 10, glove).to(device)
 model.init_temperature(1.0)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=0.01)
-
-
-
-#
-# sentences1 = [x[0] for x in training_data]
-# sentences2 = [x[1] for x in training_data]
-#
-# print("convert")
-# ops1, oopl1, edgelex1 = convert_sentences(sentences1, allowed)
-# ops2, oopl2, edgelex2 = convert_sentences(sentences2, allowed)
-# print("forward")
-# print(model(sentences1, ops1, oopl1, sentences2, ops2, oopl2))
-# sys.exit(0)
-
 
 
 for epoch in range(10):
@@ -252,11 +238,22 @@ for epoch in range(10):
         lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE]).to(device)
 
         print("convert")
-        # TODO - I think this can happen once in the beginning
+        # TODO - I think this can happen once in the beginning --- but it is not nearly the dominant part of the runtime, so who cares.
+
         ops1, oopl1, edgelex1 = convert_sentences(s1, allowed)
         ops2, oopl2, edgelex2 = convert_sentences(s2, allowed)
-        print(f"max oopl1: {max(oopl1)}")
-        print(f"max oopl2: {max(oopl2)}")
+        print(f"max oplen: {max(oopl1)}, {max(oopl2)}")
+
+        all_ops = 0
+        zero_ops = 0
+        for x in ops1:
+            for y in x:
+                for z in y:
+                    all_ops += 1
+                    if z == (0,0):
+                        zero_ops += 1
+
+        print(f"zero ops: {zero_ops}/{all_ops} ({100*zero_ops/all_ops}%)")
 
         mid = time.time()
         print("forward")

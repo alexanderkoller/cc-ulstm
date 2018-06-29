@@ -45,7 +45,10 @@ class SequentialChart(Module):
             torch.nn.init.uniform_(p)
 
     def _get_device(self):
-        return self.W.get_device()
+        try:
+            return self.W.get_device()
+        except:
+            return "cpu" # Tensors on CPU apparently don't have get_device method.
 
     def init_temperature(self, temp):
         self.temperature = torch.tensor([temp]).to(self._get_device())
@@ -63,7 +66,7 @@ class SequentialChart(Module):
 
     def chart_for_batch(self, sentences, word_embeddings, original_opseq_lengths, max_sentence_length):
         bs = len(sentences)
-        device = self.W.get_device()
+        device = self._get_device()
         chart = torch.zeros(bs, max_sentence_length + max(original_opseq_lengths), 2 * self.hidden_dim)
 
         for i in range(max_sentence_length):
@@ -93,7 +96,7 @@ class SequentialChart(Module):
         # ops = [(L,R), ..., (L,R)], i.e. all ways in which this item can be built from a left and right part; L,R are indices into chart rows (dimension 1)
 
         # operations and opseq have been padded to max length. Original lengths of the opseqs (before padding) are in original_operations_lengths.
-        device = self.W.get_device()
+        device = self._get_device()
 
         max_sentence_length = max(len(sentence) for sentence in sentences)
         chart = self.chart_for_batch(sentences, self.glove, original_operations_lengths, max_sentence_length).to(device)
