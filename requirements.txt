@@ -1,0 +1,11 @@
+torch
+nltk
+torchtext
+spacy
+
+
+# python -m nltk.downloader perluniprops nonbreaking_prefixes punkt
+# python -m spacy download en
+
+
+
