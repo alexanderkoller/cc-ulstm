@@ -23,6 +23,9 @@ class SnliModel(Module):
 
         return internal2
 
+    def init_temperature(self, temp):
+        self.sentence_model.init_temperature(temp)
+
 class SequentialChart(Module):
     def __init__(self, hidden_dim, embedding_dim, glove):
         super(SequentialChart, self).__init__()
@@ -41,7 +44,11 @@ class SequentialChart(Module):
         for p in (self.W, self.U, self.energy_u, self.unk_embedding):
             torch.nn.init.uniform_(p)
 
-        self.temperature = torch.tensor([1.])
+    def _get_device(self):
+        return self.W.get_device()
+
+    def init_temperature(self, temp):
+        self.temperature = torch.tensor([temp]).to(self._get_device())
 
     def ch(self, preact, ccL, ccR):
         i = F.sigmoid(preact[:, :, :self.hidden_dim])  # (bs, amb, hd)

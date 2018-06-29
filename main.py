@@ -221,6 +221,7 @@ with open(train_file) as f:
 
 # set up model and optimizer
 model = SnliModel(10, 100, 10, glove).to(device)
+model.init_temperature(1.0)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=0.01)
 
