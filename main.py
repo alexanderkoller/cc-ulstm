@@ -1,10 +1,7 @@
 import json
-import sys
-from collections import defaultdict
-from queue import Queue
 
 import nltk
-import spacy
+# import spacy
 import torch
 import torchtext
 from torch.optim import Adam
@@ -172,7 +169,7 @@ def tokenize(sentence):
 
 # word_lex = Lexicon()
 
-tokenizer = spacy.load('en_core_web_sm')
+# tokenizer = spacy.load('en_core_web_sm')
 
 def word_lookup(words):
     def lookup(word):
