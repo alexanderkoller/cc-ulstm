@@ -1,4 +1,5 @@
 import json
+import time
 
 import nltk
 # import spacy
@@ -9,10 +10,15 @@ from tqdm import tqdm
 
 from model import SequentialChart, SnliModel
 
-bs = 3
-seqlen = 6
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+
+# bs = 3
+# seqlen = 6
 hd = 2
 
+
+# torch.set_num_threads(4)
 
 
 glove = torchtext.vocab.GloVe(name='6B', dim=100)
@@ -214,11 +220,9 @@ with open(train_file) as f:
 
 
 # set up model and optimizer
-model = SnliModel(10, 100, 10, glove)
+model = SnliModel(10, 100, 10, glove).to(device)
 criterion = torch.nn.CrossEntropyLoss()
-optimizer = Adam(model.parameters())
-
-
+optimizer = Adam(model.parameters(), lr=0.01)
 
 
 
@@ -241,9 +245,10 @@ for epoch in range(10):
 
     for batch in range(int(MAX_SENTENCES/BATCHSIZE)):
         print(f"\nbatch {batch}")
+        start = time.time()
         s1 = training_sent1[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
         s2 = training_sent2[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
-        lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE])
+        lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE]).to(device)
 
         print("convert")
         # TODO - I think this can happen once in the beginning
@@ -252,41 +257,24 @@ for epoch in range(10):
         print(f"max oopl1: {max(oopl1)}")
         print(f"max oopl2: {max(oopl2)}")
 
+        mid = time.time()
         print("forward")
         predictions = model(s1, ops1, oopl1, s2, ops2, oopl2)
 
         loss = criterion(predictions, lab)
         total_loss += loss.item()
 
+        after_forward = time.time()
+        print("backward")
+
         loss.backward()
         optimizer.step()
 
+        end = time.time()
+
         print(f"loss in batch {batch}: {loss.item()}")
+        print(f"convert: {mid-start}, forward: {after_forward-mid}, backward: {end-after_forward}")
+
 
     print(total_loss)
 
-
-
-
-
-
-#
-#
-# all_operations, original_opseq_lengths, all_edgelex = convert_sentences(sentences, allowed, model)
-# max_sentence_length = max([len(sent) for sent in sentences])
-#
-# for i, sentence in enumerate(sentences):
-#     print(f"{i+1}: {sentence}")
-#
-# # print(f"msl: {max_sentence_length}; ool: {original_opseq_lengths}")
-#
-# chart = model.chart_for_batch(sentences, glove, original_opseq_lengths, max_sentence_length)
-#
-# result = model(chart, all_operations, max_sentence_length, original_opseq_lengths)
-# print(result)
-# #def forward(self, chart, operations, start_index, original_operations_lengths):
-#
-#
-# print(chart.size())
-# print(chart[0,0,:])
-# sys.exit(0)

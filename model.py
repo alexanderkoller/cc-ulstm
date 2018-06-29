@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torch.nn.functional as F
 from torch.nn import Module, Parameter, Linear
@@ -83,9 +85,10 @@ class SequentialChart(Module):
         # ops = [(L,R), ..., (L,R)], i.e. all ways in which this item can be built from a left and right part; L,R are indices into chart rows (dimension 1)
 
         # operations and opseq have been padded to max length. Original lengths of the opseqs (before padding) are in original_operations_lengths.
+        device = self.W.get_device()
 
         max_sentence_length = max(len(sentence) for sentence in sentences)
-        chart = self.chart_for_batch(sentences, self.glove, original_operations_lengths, max_sentence_length)
+        chart = self.chart_for_batch(sentences, self.glove, original_operations_lengths, max_sentence_length).to(device)
         start_index = max_sentence_length
 
         bs = chart.size()[0]
@@ -93,8 +96,12 @@ class SequentialChart(Module):
 
         max_opseq_length = max([len(opseq) for opseq in operations])  # max length of the opseq's
 
+        total_setup_time = 0
+        total_forward_time = 0
+
         for step in range(max_opseq_length):
             # TODO - this is probably expensive. See if it can be made faster.
+            start = time.time()
             chart_entries = [
                 torch.stack(
                     [torch.stack((chart[b,l,:], chart[b,r,:])) for l,r in operations[b][step]] # list of amb entries of shape (2, 2*hd)
@@ -103,6 +110,8 @@ class SequentialChart(Module):
 
             chart_entries = torch.stack(chart_entries) # (bs, amb, 2, 2*hd)
             amb = chart_entries.size()[1] # #decompositions of items in this step
+
+            mid = time.time()
 
             cc = chart_entries[:,:,:,:self.hidden_dim]   # (bs, amb, 2, hd)
             ccL = cc[:,:,0,:].squeeze(dim=2) # (bs, amb, hd)
@@ -129,6 +138,12 @@ class SequentialChart(Module):
             chart[:, start_index+step, :self.hidden_dim] = combined_c
             chart[:, start_index+step, self.hidden_dim:] = combined_h
 
+            end = time.time()
+            total_setup_time += (mid-start)
+            total_forward_time += (end-mid)
+
+
+        print(f"model: setup={total_setup_time}s, forward={total_forward_time}s")
 
         # return a tensor with h for the final state of each sentence in the minibatch
         ret = torch.stack([chart[b, original_operations_lengths[b]-1, self.hidden_dim:] for b in range(bs)]) # (bs, hd)
