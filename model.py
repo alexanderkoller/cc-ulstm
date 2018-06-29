@@ -56,6 +56,7 @@ class SequentialChart(Module):
 
     def chart_for_batch(self, sentences, word_embeddings, original_opseq_lengths, max_sentence_length):
         bs = len(sentences)
+        device = self.W.get_device()
         chart = torch.zeros(bs, max_sentence_length + max(original_opseq_lengths), 2 * self.hidden_dim)
 
         for i in range(max_sentence_length):
@@ -63,10 +64,10 @@ class SequentialChart(Module):
             for b, sentence in enumerate(sentences):
                 if i >= len(sentence):
                     # no word at this position
-                    preact[b] = torch.zeros((1,5*self.hidden_dim))
+                    preact[b] = torch.zeros((1,5*self.hidden_dim)).to(device)
                 else:
                     wordid = sentence[i]
-                    emb = word_embeddings.vectors[wordid] if wordid >= 0 else self.unk_embedding  # (embdim)
+                    emb = word_embeddings.vectors[wordid].to(device) if wordid >= 0 else self.unk_embedding  # (embdim)
                     preact[b] = self.W @ emb + self.b  # (5*hd), broadcast into (1, 5*hd)
 
             c,h = self.ch(preact, 0, 0) # 2x (bs, 1, hd)
