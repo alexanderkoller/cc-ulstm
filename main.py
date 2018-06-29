@@ -199,7 +199,7 @@ max_sentence2_length = 0
 
 snli_label_dict = {"neutral": 0, "contradiction":1, "entailment":2}
 
-train_file = "/Users/akoller/Downloads/snli_1.0/snli_1.0_train.jsonl"
+train_file = "data/snli_1.0/snli_1.0_train.jsonl"
 with open(train_file) as f:
     for line in tqdm(f, desc="Reading training sentences", total=get_num_lines(train_file)):
         j = json.loads(line)
