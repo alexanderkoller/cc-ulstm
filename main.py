@@ -20,6 +20,7 @@ parser = argparse.ArgumentParser(description='Train the model.')
 parser.add_argument('--epochs', default='10', type=int)
 parser.add_argument('--bs', default='20', type=int)
 parser.add_argument('--hidden-dim', default='10', type=int)
+parser.add_argument('--lr', default='0.01', type=float)
 args = parser.parse_args()
 
 BATCHSIZE = args.bs
@@ -234,7 +235,7 @@ with open(train_file) as f:
 model = SnliModel(hd, 100, 10, glove).to(device)
 model.init_temperature(1.0)
 criterion = torch.nn.CrossEntropyLoss()
-optimizer = Adam(model.parameters(), lr=0.01)
+optimizer = Adam(model.parameters(), lr=args.lr)
 
 
 for epoch in range(NUM_EPOCHS):
