@@ -1,4 +1,6 @@
 import time
+import itertools
+import sys
 
 import torch
 import torch.nn.functional as F
@@ -113,14 +115,48 @@ class SequentialChart(Module):
         for step in range(max_opseq_length):
             # TODO - this is probably expensive. See if it can be made faster.
             start = time.time()
-            chart_entries = [
-                torch.stack(
-                    [torch.stack((chart[b,l,:], chart[b,r,:])) for l,r in operations[b][step]] # list of amb entries of shape (2, 2*hd)
-                ) # (amb, 2, 2*hd)
-                for b in range(bs)]   # len=bs; chart_entries[b]: (2, 2*hd)
 
-            chart_entries = torch.stack(chart_entries) # (bs, amb, 2, 2*hd)
-            amb = chart_entries.size()[1] # #decompositions of items in this step
+            # TODO - reorganize operations when they are computed so this doesn't have to be done a time-critical time
+            ops_in_step = [list(itertools.chain.from_iterable(operations[b][step])) for b in range(bs)]
+            indices = [[i]*len(ops) for i,ops in enumerate(ops_in_step)]
+
+            # print(ops_in_step)
+            # print(len(ops_in_step))
+            # continue
+
+            chart_entries = chart[indices, ops_in_step, :]   # (bs, 2*amb, 2*hd)
+
+            #
+            # print(chart_entries.shape)
+            #
+            # print(ops_in_step)
+            # print(indices)
+            # sys.exit(0)
+            #
+            #
+            # flat = list(itertools.chain.from_iterable(ops_in_step))
+            #
+            # # indices =
+            #
+            #
+            # print(flat)
+            # sys.exit(0)
+            #
+            #
+            # print(operations[b][step])
+            #
+            #
+            # chart_entries = [
+            #     torch.stack(
+            #         [torch.stack((chart[b,l,:], chart[b,r,:])) for l,r in operations[b][step]] # list of amb entries of shape (2, 2*hd)
+            #     ) # (amb, 2, 2*hd)
+            #     for b in range(bs)]   # len=bs; chart_entries[b]: (2, 2*hd)
+            #
+            # chart_entries = torch.stack(chart_entries) # (bs, amb, 2, 2*hd)
+
+            assert chart_entries.size()[1] % 2 == 0
+            amb = chart_entries.size()[1]//2                      # #decompositions of items in this step
+            chart_entries = chart_entries.view(bs, amb, 2, -1)    # (bs, amb, 2, hd)
 
             mid = time.time()
 

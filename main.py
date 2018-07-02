@@ -16,7 +16,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 # bs = 3
 # seqlen = 6
-hd = 2
+hd = 10
 
 
 # torch.set_num_threads(4)
@@ -189,7 +189,7 @@ def word_lookup(words):
 
 # sentences = []
 MAX_SENTENCES = 100
-BATCHSIZE = 10
+BATCHSIZE = 20
 
 training_sent1 = []
 training_sent2 = []
@@ -220,7 +220,7 @@ with open(train_file) as f:
 
 
 # set up model and optimizer
-model = SnliModel(10, 100, 10, glove).to(device)
+model = SnliModel(hd, 100, 10, glove).to(device)
 model.init_temperature(1.0)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=0.01)
@@ -265,13 +265,15 @@ for epoch in range(10):
         after_forward = time.time()
         print("backward")
 
-        loss.backward()
+        loss.backward() # -> check that gradients that should be non-zero are
         optimizer.step()
 
         end = time.time()
 
         print(f"loss in batch {batch}: {loss.item()}")
         print(f"convert: {mid-start}, forward: {after_forward-mid}, backward: {end-after_forward}")
+
+    # sys.exit(0)
 
 
     print(total_loss)
