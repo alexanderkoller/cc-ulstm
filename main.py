@@ -1,3 +1,4 @@
+import argparse
 import json
 import sys
 import time
@@ -13,6 +14,17 @@ from model import SequentialChart, SnliModel
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
+
+parser = argparse.ArgumentParser(description='Train the model.')
+parser.add_argument('--epochs', default='10', type=int)
+parser.add_argument('--bs', default='20', type=int)
+parser.add_argument('--hidden-dim', default='10', type=int)
+args = parser.parse_args()
+
+BATCHSIZE = args.bs
+hd = args.hidden_dim
+NUM_EPOCHS = args.epochs
 
 # bs = 3
 # seqlen = 6
@@ -189,7 +201,6 @@ def word_lookup(words):
 
 # sentences = []
 MAX_SENTENCES = 100
-BATCHSIZE = 20
 
 training_sent1 = []
 training_sent2 = []
@@ -226,7 +237,7 @@ criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=0.01)
 
 
-for epoch in range(10):
+for epoch in range(NUM_EPOCHS):
     optimizer.zero_grad()
     total_loss = 0
 
