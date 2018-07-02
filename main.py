@@ -22,6 +22,9 @@ parser.add_argument('--epochs', default='10', type=int)
 parser.add_argument('--bs', default='20', type=int)
 parser.add_argument('--hidden-dim', default='10', type=int)
 parser.add_argument('--lr', default='0.01', type=float)
+parser.add_argument('--show-zero-ops', action='store_true')
+parser.add_argument('--limit', default='100', type=int)
+
 args = parser.parse_args()
 
 BATCHSIZE = args.bs
@@ -201,8 +204,7 @@ def word_lookup(words):
 
     return [lookup(word) for word in words]
 
-# sentences = []
-MAX_SENTENCES = 100
+MAX_SENTENCES = args.limit
 
 training_sent1 = []
 training_sent2 = []
@@ -267,29 +269,17 @@ for epoch in range(NUM_EPOCHS):
         lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE]).to(device)
         pr1, pr2 = batched_parses[batch]
 
-        #
-        #
-        # s1 = training_sent1[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
-        # s2 = training_sent2[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
-        # lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE]).to(device)
-        #
-        # print("convert")
-        # # TODO - I think this can happen once in the beginning --- but it is not nearly the dominant part of the runtime, so who cares.
-        #
-        # ops1, oopl1, edgelex1 = convert_sentences(s1, allowed)
-        # ops2, oopl2, edgelex2 = convert_sentences(s2, allowed)
-        # print(f"max oplen: {max(oopl1)}, {max(oopl2)}")
+        if args.show_zero_ops:
+            all_ops = 0
+            zero_ops = 0
+            for x in pr1.ops:
+                for y in x:
+                    for z in y:
+                        all_ops += 1
+                        if z == (0,0):
+                            zero_ops += 1
 
-        all_ops = 0
-        zero_ops = 0
-        for x in pr1.ops:
-            for y in x:
-                for z in y:
-                    all_ops += 1
-                    if z == (0,0):
-                        zero_ops += 1
-
-        # print(f"zero ops: {zero_ops}/{all_ops} ({100*zero_ops/all_ops}%)")
+            print(f"zero ops: {zero_ops}/{all_ops} ({100*zero_ops/all_ops}%)")
 
         mid = time.time()
         # print("forward")
