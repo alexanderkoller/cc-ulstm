@@ -2,6 +2,7 @@ import argparse
 import json
 import sys
 import time
+from collections import namedtuple
 
 import nltk
 # import spacy
@@ -231,6 +232,23 @@ with open(train_file) as f:
             break
 
 
+# parse all the sentences once
+# (may need to do this for each batch, if it doesn't fit in memory)
+ParsingResult = namedtuple("ParsingResult", ["sentences", "ops", "oopl", "edgelex"])
+batched_parses = []
+for batch in tqdm(range(int(MAX_SENTENCES/BATCHSIZE)), desc="Parsing all sentences"):
+    s1 = training_sent1[batch * BATCHSIZE: (batch + 1) * BATCHSIZE]
+    s2 = training_sent2[batch * BATCHSIZE: (batch + 1) * BATCHSIZE]
+    ops1, oopl1, edgelex1 = convert_sentences(s1, allowed)
+    ops2, oopl2, edgelex2 = convert_sentences(s2, allowed)
+
+    pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
+    pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
+
+    batched_parses.append((pr1,pr2))
+
+
+
 # set up model and optimizer
 model = SnliModel(hd, 100, 10, glove).to(device)
 model.init_temperature(1.0)
@@ -245,37 +263,43 @@ for epoch in range(NUM_EPOCHS):
     for batch in range(int(MAX_SENTENCES/BATCHSIZE)):
         print(f"\nbatch {batch}")
         start = time.time()
-        s1 = training_sent1[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
-        s2 = training_sent2[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
+
         lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE]).to(device)
+        pr1, pr2 = batched_parses[batch]
 
-        print("convert")
-        # TODO - I think this can happen once in the beginning --- but it is not nearly the dominant part of the runtime, so who cares.
-
-        ops1, oopl1, edgelex1 = convert_sentences(s1, allowed)
-        ops2, oopl2, edgelex2 = convert_sentences(s2, allowed)
-        print(f"max oplen: {max(oopl1)}, {max(oopl2)}")
+        #
+        #
+        # s1 = training_sent1[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
+        # s2 = training_sent2[batch*BATCHSIZE : (batch+1)*BATCHSIZE]
+        # lab = torch.LongTensor(training_labels[batch*BATCHSIZE : (batch+1)*BATCHSIZE]).to(device)
+        #
+        # print("convert")
+        # # TODO - I think this can happen once in the beginning --- but it is not nearly the dominant part of the runtime, so who cares.
+        #
+        # ops1, oopl1, edgelex1 = convert_sentences(s1, allowed)
+        # ops2, oopl2, edgelex2 = convert_sentences(s2, allowed)
+        # print(f"max oplen: {max(oopl1)}, {max(oopl2)}")
 
         all_ops = 0
         zero_ops = 0
-        for x in ops1:
+        for x in pr1.ops:
             for y in x:
                 for z in y:
                     all_ops += 1
                     if z == (0,0):
                         zero_ops += 1
 
-        print(f"zero ops: {zero_ops}/{all_ops} ({100*zero_ops/all_ops}%)")
+        # print(f"zero ops: {zero_ops}/{all_ops} ({100*zero_ops/all_ops}%)")
 
         mid = time.time()
-        print("forward")
-        predictions = model(s1, ops1, oopl1, s2, ops2, oopl2)
+        # print("forward")
+        predictions = model(pr1.sentences, pr1.ops, pr1.oopl, pr2.sentences, pr2.ops, pr2.oopl)
 
         loss = criterion(predictions, lab)
         total_loss += loss.item()
 
         after_forward = time.time()
-        print("backward")
+        # print("backward")
 
         loss.backward() # -> check that gradients that should be non-zero are
         optimizer.step()
@@ -288,5 +312,5 @@ for epoch in range(NUM_EPOCHS):
     # sys.exit(0)
 
 
-    print(total_loss)
+    print(f"\n\n=== total loss after epoch {epoch}: {total_loss} ===\n")
 
