@@ -213,7 +213,7 @@ training_labels = []
 max_sentence1_length = 0
 max_sentence2_length = 0
 
-snli_label_dict = {"neutral": 0, "contradiction":1, "entailment":2}
+snli_label_dict = {"neutral": 0, "contradiction":1, "entailment":2, "-": 0} # TODO - I don't understand the "-" label, double-check it
 
 train_file = "data/snli_1.0/snli_1.0_train.jsonl"
 with open(train_file) as f:
