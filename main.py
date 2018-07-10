@@ -1,5 +1,10 @@
+import socket
+
+from comet_ml import Experiment
+
 import argparse
 import json
+import os
 import sys
 import time
 from collections import namedtuple
@@ -24,16 +29,39 @@ parser.add_argument('--hidden-dim', default='10', type=int)
 parser.add_argument('--lr', default='0.01', type=float)
 parser.add_argument('--show-zero-ops', action='store_true')
 parser.add_argument('--limit', default='100', type=int)
+parser.add_argument('--comet', default=None, type=str)
 
 args = parser.parse_args()
 
 BATCHSIZE = args.bs
 hd = args.hidden_dim
 NUM_EPOCHS = args.epochs
+INITIAL_TEMPERATURE = 1.0
 
 # bs = 3
 # seqlen = 6
 hd = 10
+
+COMET_API_KEY = args.comet
+
+if COMET_API_KEY is not None:
+    # Record experiment in Comet
+
+    experiment  = Experiment(api_key=COMET_API_KEY, project_name="CC-ULSTM")
+
+    hyper_params = {
+        "batch_size": BATCHSIZE,
+        "epochs": NUM_EPOCHS,
+        "learning_rate": args.lr,
+        "device": str(device),
+        "initial_temperature": INITIAL_TEMPERATURE,
+        "hidden_dim": hd,
+        "limit": args.limit,
+    }
+    hyper_params["hostname"] = socket.gethostname() or "(undefined)"
+
+    experiment.log_multiple_params(hyper_params)
+
 
 
 # torch.set_num_threads(4)
@@ -253,7 +281,7 @@ for batch in tqdm(range(int(MAX_SENTENCES/BATCHSIZE)), desc="Parsing all sentenc
 
 # set up model and optimizer
 model = MaillardSnliModel(hd, 100, 3, glove).to(device)
-model.init_temperature(1.0)
+model.init_temperature(INITIAL_TEMPERATURE)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=args.lr)
 
@@ -303,4 +331,7 @@ for epoch in range(NUM_EPOCHS):
 
 
     print(f"\n\n=== total loss after epoch {epoch}: {total_loss} ===\n")
+
+    if args.comet is not None:
+        experiment.log_metric("loss", total_loss, step=epoch+1)
 
