@@ -28,6 +28,45 @@ class SnliModel(Module):
     def init_temperature(self, temp):
         self.sentence_model.init_temperature(temp)
 
+
+
+class MaillardSnliModel(Module):
+    def __init__(self, hidden_dim, embedding_dim, mlp_dim, glove):
+        super(MaillardSnliModel, self).__init__()
+
+        self.sentence_model = SequentialChart(hidden_dim, embedding_dim, glove)
+
+        self.hidden_dim = hidden_dim
+        self.mlp_dim = mlp_dim
+
+        self.A = Parameter(torch.zeros(mlp_dim, 4*hidden_dim), requires_grad=True) # (mlpd, 4*hd)
+        self.a = Parameter(torch.zeros(mlp_dim,), requires_grad=True)              # (mlpd)
+
+        for p in (self.A, self.a):
+            torch.nn.init.uniform_(p)
+
+    def forward(self, sentences1, operations1, oopl1, sentences2, operations2, oopl2):
+        # return F.relu(self.A@conc + self.a)
+
+        s1 = self.sentence_model(sentences1, operations1, oopl1) # (bs, hd)
+        s2 = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
+
+        u = (s1-s2)**2  # (bs,hd)
+        v = s1.mul(s2)  # (bs,hd)
+
+        bs = u.shape[0]
+
+        A = self.A.view(1,self.mlp_dim,4*self.hidden_dim).expand(bs,-1,-1) # (bs, mlpd, 4*hd)
+        a = self.a.view(1,self.mlp_dim).expand(bs,-1)                      # (bs, mlpd)
+
+        conc = torch.cat([u,v,s1,s2], dim=1) # (bs, 4*hd)
+        Ac = torch.einsum("ijk,ik->ij", [A, conc])
+
+        return F.relu(Ac + a)
+
+    def init_temperature(self, temp):
+        self.sentence_model.init_temperature(temp)
+
 class SequentialChart(Module):
     def __init__(self, hidden_dim, embedding_dim, glove):
         super(SequentialChart, self).__init__()

@@ -11,7 +11,7 @@ import torchtext
 from torch.optim import Adam
 from tqdm import tqdm
 
-from model import SequentialChart, SnliModel
+from model import SequentialChart, SnliModel, MaillardSnliModel
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -252,7 +252,7 @@ for batch in tqdm(range(int(MAX_SENTENCES/BATCHSIZE)), desc="Parsing all sentenc
 
 
 # set up model and optimizer
-model = SnliModel(hd, 100, 10, glove).to(device)
+model = MaillardSnliModel(hd, 100, 3, glove).to(device)
 model.init_temperature(1.0)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=args.lr)
