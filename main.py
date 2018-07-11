@@ -33,6 +33,7 @@ parser.add_argument('--show-zero-ops', action='store_true')
 parser.add_argument('--limit', default='100', type=int)
 parser.add_argument('--comet', default=None, type=str)
 parser.add_argument('--cc', default=None, type=str)
+parser.add_argument('--sort', action='store_true') # sort by length
 
 args = parser.parse_args()
 
@@ -60,7 +61,8 @@ if COMET_API_KEY is not None:
         "initial_temperature": INITIAL_TEMPERATURE,
         "hidden_dim": hd,
         "limit": args.limit,
-        "cc": args.cc
+        "cc": args.cc,
+        "sort": args.sort
     }
     hyper_params["hostname"] = socket.gethostname() or "(undefined)"
 
@@ -119,7 +121,7 @@ num_edges_considered = 0
 num_edges_allowed = 0
 
 
-def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset):
+def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_index):
     global num_edges_considered
     global num_edges_allowed
     global glove
@@ -141,7 +143,9 @@ def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset):
             # print(f"\nItem: {start}-{start+width} of {n}")
             num_edges_considered += 1
 
-            if cc.is_edge_allowed(sentence_index+sentence_index_offset, start, start+width):
+            original_sentence_index = original_index[sentence_index_offset+sentence_index]
+
+            if cc.is_edge_allowed(original_sentence_index, start, start+width):
                 num_edges_allowed += 1
                 ops = [] # decompositions for this item
 
@@ -191,14 +195,15 @@ def pad_operations(all_operations, max_ops_length):
             pad_list(all_operations[i][pos], maxlen, (0,0))
 
 
-def convert_sentences(sentences, cc, sentence_index_offset):
+def convert_sentences(sentences, cc, sentence_index_offset, original_index):
     # sentences: list(list(int)); len(sentences) = bs; len(sentences[0]) = length of first sentence; sentences[i][j] = id of j-th word in i-th sentence
     # cc: object with chart constraints; cc.is_edge_allowed(i,j,k) = True iff edge from j-k in i is allowed
     # sentence_index_offset: offset of first sentence in this batch in the global list of sentences (for determining chart constraints)
+    # original_index: list that specifies the original sentence index for each sentence
 
     max_sentence_length = max([len(sent) for sent in sentences])
     bs = len(sentences)
-    parses = [parse(sent, sent_index, max_sentence_length, cc, sentence_index_offset) for sent_index, sent in enumerate(sentences)]
+    parses = [parse(sent, sent_index, max_sentence_length, cc, sentence_index_offset, original_index) for sent_index, sent in enumerate(sentences)]
     all_operations, all_edgelex = zip(*parses)
 
     num_decomps = [[len(decomps) for decomps in sent_operations] for sent_operations in all_operations]
@@ -264,6 +269,18 @@ with open(train_file) as f:
             break
 
 
+# if requested, sort inputs by length of sent1
+if args.sort:
+    print(f"before: {[len(x) for x in training_sent1[:100]]}")
+    to_sort = zip(training_sent1, training_sent2, training_labels, range(len(training_sent1)))
+    srted = sorted(to_sort, key=lambda x:len(x[0])) # TODO - try len(x[0])+len(x[1])
+    training_sent1, training_sent2, training_labels, original_index = zip(*srted)
+    print(f"after: {[len(x) for x in training_sent1[:100]]}")
+else:
+    original_index = list(range(len(training_sent1)))
+
+
+
 # parse all the sentences once
 # (may need to do this for each batch, if it doesn't fit in memory)
 ParsingResult = namedtuple("ParsingResult", ["sentences", "ops", "oopl", "edgelex"])
@@ -281,6 +298,7 @@ else:
 
 num_edges_considered = 0
 num_edges_allowed = 0
+num_pads = 0
 
 num_batches = int(MAX_SENTENCES/BATCHSIZE)
 
@@ -288,8 +306,17 @@ for batch in tqdm(range(num_batches), desc="Parsing all sentences"):
     offset = batch * BATCHSIZE
     s1 = training_sent1[offset : offset+BATCHSIZE]
     s2 = training_sent2[offset : offset+BATCHSIZE]
-    ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset)
-    ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset)
+
+    lens = [len(s) for s in s1]
+    min_len = min(lens)
+    num_pads += sum([l-min_len for l in lens])
+
+    lens = [len(s) for s in s2]
+    min_len = min(lens)
+    num_pads += sum([l - min_len for l in lens])
+
+    ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index)
+    ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index)
 
     pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
     pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
@@ -300,8 +327,8 @@ if MAX_SENTENCES % BATCHSIZE > 0:
     offset = num_batches * BATCHSIZE
     s1 = training_sent1[offset: MAX_SENTENCES]
     s2 = training_sent2[offset: MAX_SENTENCES]
-    ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset)
-    ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset)
+    ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index)
+    ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index)
 
     pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
     pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
@@ -309,6 +336,7 @@ if MAX_SENTENCES % BATCHSIZE > 0:
     batched_parses.append((pr1, pr2))
 
 print(f"Allowed edges: {num_edges_allowed}/{num_edges_considered} ({100.0*num_edges_allowed/num_edges_considered}%)")
+print(f"Padding: {num_pads}")
 
 # set up model and optimizer
 model = MaillardSnliModel(hd, 100, 3, glove).to(device)
