@@ -26,3 +26,6 @@ for s_bs, s_lr in sample:
     bs = select_discrete([100, 200, 300, 400, 500], s_bs)
     lr = select_discrete([0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1], s_lr)
     print(f"{bs}\t{lr}")
+
+
+# todo hidden-dim
