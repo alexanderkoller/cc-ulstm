@@ -271,11 +271,13 @@ with open(train_file) as f:
 
 # if requested, sort inputs by length of sent1
 if args.sort:
-    print(f"before: {[len(x) for x in training_sent1[:100]]}")
+    print("Sorting sentences by length ...")
+    # print(f"before: {[len(x) for x in training_sent1[:100]]}")
     to_sort = zip(training_sent1, training_sent2, training_labels, range(len(training_sent1)))
     srted = sorted(to_sort, key=lambda x:len(x[0])) # TODO - try len(x[0])+len(x[1])
     training_sent1, training_sent2, training_labels, original_index = zip(*srted)
-    print(f"after: {[len(x) for x in training_sent1[:100]]}")
+    # print(f"after: {[len(x) for x in training_sent1[:100]]}")
+    print("Done.")
 else:
     original_index = list(range(len(training_sent1)))
 
@@ -298,7 +300,7 @@ else:
 
 num_edges_considered = 0
 num_edges_allowed = 0
-num_pads = 0
+# num_pads = 0
 
 num_batches = int(MAX_SENTENCES/BATCHSIZE)
 
@@ -307,13 +309,13 @@ for batch in tqdm(range(num_batches), desc="Parsing all sentences"):
     s1 = training_sent1[offset : offset+BATCHSIZE]
     s2 = training_sent2[offset : offset+BATCHSIZE]
 
-    lens = [len(s) for s in s1]
-    min_len = min(lens)
-    num_pads += sum([l-min_len for l in lens])
-
-    lens = [len(s) for s in s2]
-    min_len = min(lens)
-    num_pads += sum([l - min_len for l in lens])
+    # lens = [len(s) for s in s1]
+    # min_len = min(lens)
+    # num_pads += sum([l-min_len for l in lens])
+    #
+    # lens = [len(s) for s in s2]
+    # min_len = min(lens)
+    # num_pads += sum([l - min_len for l in lens])
 
     ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index)
     ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index)
@@ -336,7 +338,7 @@ if MAX_SENTENCES % BATCHSIZE > 0:
     batched_parses.append((pr1, pr2))
 
 print(f"Allowed edges: {num_edges_allowed}/{num_edges_considered} ({100.0*num_edges_allowed/num_edges_considered}%)")
-print(f"Padding: {num_pads}")
+# print(f"Padding: {num_pads}")
 
 # set up model and optimizer
 model = MaillardSnliModel(hd, 100, 3, glove).to(device)
