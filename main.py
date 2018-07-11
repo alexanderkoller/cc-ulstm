@@ -60,6 +60,7 @@ if COMET_API_KEY is not None:
         "initial_temperature": INITIAL_TEMPERATURE,
         "hidden_dim": hd,
         "limit": args.limit,
+        "cc": args.cc
     }
     hyper_params["hostname"] = socket.gethostname() or "(undefined)"
 
