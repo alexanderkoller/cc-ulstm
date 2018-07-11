@@ -281,8 +281,9 @@ else:
 num_edges_considered = 0
 num_edges_allowed = 0
 
+num_batches = int(MAX_SENTENCES/BATCHSIZE)
 
-for batch in tqdm(range(int(MAX_SENTENCES/BATCHSIZE)), desc="Parsing all sentences"):
+for batch in tqdm(range(num_batches), desc="Parsing all sentences"):
     offset = batch * BATCHSIZE
     s1 = training_sent1[offset : offset+BATCHSIZE]
     s2 = training_sent2[offset : offset+BATCHSIZE]
@@ -293,6 +294,18 @@ for batch in tqdm(range(int(MAX_SENTENCES/BATCHSIZE)), desc="Parsing all sentenc
     pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
 
     batched_parses.append((pr1,pr2))
+
+if MAX_SENTENCES % BATCHSIZE > 0:
+    offset = num_batches * BATCHSIZE
+    s1 = training_sent1[offset: MAX_SENTENCES]
+    s2 = training_sent2[offset: MAX_SENTENCES]
+    ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset)
+    ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset)
+
+    pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
+    pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
+
+    batched_parses.append((pr1, pr2))
 
 print(f"Allowed edges: {num_edges_allowed}/{num_edges_considered} ({100.0*num_edges_allowed/num_edges_considered}%)")
 
