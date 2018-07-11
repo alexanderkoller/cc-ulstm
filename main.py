@@ -341,7 +341,7 @@ print(f"Allowed edges: {num_edges_allowed}/{num_edges_considered} ({100.0*num_ed
 # print(f"Padding: {num_pads}")
 
 # set up model and optimizer
-model = MaillardSnliModel(hd, 100, 3, glove).to(device)
+model = MaillardSnliModel(hd, 100, 3, glove, device).to(device)
 model.init_temperature(INITIAL_TEMPERATURE)
 criterion = torch.nn.CrossEntropyLoss()
 optimizer = Adam(model.parameters(), lr=args.lr)

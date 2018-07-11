@@ -31,10 +31,10 @@ class SnliModel(Module):
 
 
 class MaillardSnliModel(Module):
-    def __init__(self, hidden_dim, embedding_dim, mlp_dim, glove):
+    def __init__(self, hidden_dim, embedding_dim, mlp_dim, glove, device):
         super(MaillardSnliModel, self).__init__()
 
-        self.sentence_model = SequentialChart(hidden_dim, embedding_dim, glove)
+        self.sentence_model = SequentialChart(hidden_dim, embedding_dim, glove, device)
 
         self.hidden_dim = hidden_dim
         self.mlp_dim = mlp_dim
@@ -68,7 +68,7 @@ class MaillardSnliModel(Module):
         self.sentence_model.init_temperature(temp)
 
 class SequentialChart(Module):
-    def __init__(self, hidden_dim, embedding_dim, glove):
+    def __init__(self, hidden_dim, embedding_dim, glove, device):
         super(SequentialChart, self).__init__()
 
         self.hidden_dim = hidden_dim
@@ -83,9 +83,9 @@ class SequentialChart(Module):
         self.unk_embedding = Parameter(torch.zeros((self.embedding_dim,), requires_grad=True))
 
         V = len(glove.vectors)
-        self.word_embeddings = torch.zeros((V, self.embedding_dim))
+        self.word_embeddings = torch.zeros((V, self.embedding_dim), device=device)
         for wordid in range(V):
-            self.word_embeddings[wordid,:] = glove.vectors[wordid]
+            self.word_embeddings[wordid,:] = glove.vectors[wordid].to(device)
 
         for p in (self.W, self.U, self.energy_u, self.unk_embedding):
             torch.nn.init.uniform_(p)
