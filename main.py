@@ -388,6 +388,8 @@ for epoch in range(NUM_EPOCHS):
         print(f"loss in batch {batch}: {loss.item()}")
         print(f"convert: {mid-start}, forward: {after_forward-mid}, backward: {end-after_forward}")
 
+        del loss # to free it up before next iteration
+
     # sys.exit(0)
 
 
