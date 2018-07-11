@@ -16,7 +16,9 @@ import torchtext
 from torch.optim import Adam
 from tqdm import tqdm
 
+from chart_constraints import AllAllowedChartConstraints, BeginEndChartConstraints
 from model import SequentialChart, SnliModel, MaillardSnliModel
+from util import get_num_lines
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -30,6 +32,7 @@ parser.add_argument('--lr', default='0.01', type=float)
 parser.add_argument('--show-zero-ops', action='store_true')
 parser.add_argument('--limit', default='100', type=int)
 parser.add_argument('--comet', default=None, type=str)
+parser.add_argument('--cc', default=None, type=str)
 
 args = parser.parse_args()
 
@@ -109,7 +112,17 @@ class Lexicon:
 def allowed(sentence_id, start, end):
     return True
 
-def parse(sentence, sentence_index, maxlen, is_edge_allowed):
+
+
+num_edges_considered = 0
+num_edges_allowed = 0
+
+
+def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset):
+    global num_edges_considered
+    global num_edges_allowed
+    global glove
+
     n = len(sentence)
     operations = []
     edge_lex = Lexicon()
@@ -121,12 +134,14 @@ def parse(sentence, sentence_index, maxlen, is_edge_allowed):
 
     edge_lex.pad(maxlen)
 
-
     # build larger constituents, CKY-style
-    for width in range(2, n+1):  # 2 <= width <= n
-        for start in range(n-width+1):   # 0 <= start <= n-width
-            # print(f"\nItem: {start}-{start+width}")
-            if is_edge_allowed(sentence_index, start, start+width):
+    for width in range(2, n):  # 2 <= width <= n
+        for start in range(n-width):   # 0 <= start <= n-width
+            # print(f"\nItem: {start}-{start+width} of {n}")
+            num_edges_considered += 1
+
+            if cc.is_edge_allowed(sentence_index+sentence_index_offset, start, start+width):
+                num_edges_allowed += 1
                 ops = [] # decompositions for this item
 
                 for split in range(1,width):  # 1 <= split <= width-1, width of left part
@@ -175,14 +190,14 @@ def pad_operations(all_operations, max_ops_length):
             pad_list(all_operations[i][pos], maxlen, (0,0))
 
 
-def convert_sentences(sentences, is_edge_allowed):
+def convert_sentences(sentences, cc, sentence_index_offset):
     # sentences: list(list(int)); len(sentences) = bs; len(sentences[0]) = length of first sentence; sentences[i][j] = id of j-th word in i-th sentence
-    # is_edge_allowed: function, is_edge_allowed(i,j,k) = True iff edge from j-k in i is allowed
-    # model: a SequentialChart object, which is used to map word ids to word embeddings
+    # cc: object with chart constraints; cc.is_edge_allowed(i,j,k) = True iff edge from j-k in i is allowed
+    # sentence_index_offset: offset of first sentence in this batch in the global list of sentences (for determining chart constraints)
 
     max_sentence_length = max([len(sent) for sent in sentences])
     bs = len(sentences)
-    parses = [parse(sent, sent_index, max_sentence_length, is_edge_allowed) for sent_index, sent in enumerate(sentences)]
+    parses = [parse(sent, sent_index, max_sentence_length, cc, sentence_index_offset) for sent_index, sent in enumerate(sentences)]
     all_operations, all_edgelex = zip(*parses)
 
     num_decomps = [[len(decomps) for decomps in sent_operations] for sent_operations in all_operations]
@@ -192,15 +207,6 @@ def convert_sentences(sentences, is_edge_allowed):
 
     return all_operations, original_lengths, all_edgelex
 
-import mmap
-
-def get_num_lines(file_path):
-    fp = open(file_path, "r+")
-    buf = mmap.mmap(fp.fileno(), 0)
-    lines = 0
-    while buf.readline():
-        lines += 1
-    return lines
 
 
 # TODO - I should bucket sentences so sentences of similar length are grouped together.
@@ -217,11 +223,6 @@ def tokenize(sentence):
 
 
 
-
-
-# word_lex = Lexicon()
-
-# tokenizer = spacy.load('en_core_web_sm')
 
 def word_lookup(words):
     def lookup(word):
@@ -266,18 +267,34 @@ with open(train_file) as f:
 # (may need to do this for each batch, if it doesn't fit in memory)
 ParsingResult = namedtuple("ParsingResult", ["sentences", "ops", "oopl", "edgelex"])
 batched_parses = []
+
+if args.cc is None:
+    cc_sent1 = AllAllowedChartConstraints()
+    cc_sent2 = AllAllowedChartConstraints()
+else:
+    print("Reading chart constraints for sent1 ...")
+    cc_sent1 = BeginEndChartConstraints(f"{args.cc}/sent1/bconst_theta_0.9", f"{args.cc}/sent1/econst_theta_0.9")
+
+    print("Reading chart constraints for sent2 ...")
+    cc_sent2 = BeginEndChartConstraints(f"{args.cc}/sent2/bconst_theta_0.9", f"{args.cc}/sent2/econst_theta_0.9")
+
+num_edges_considered = 0
+num_edges_allowed = 0
+
+
 for batch in tqdm(range(int(MAX_SENTENCES/BATCHSIZE)), desc="Parsing all sentences"):
-    s1 = training_sent1[batch * BATCHSIZE: (batch + 1) * BATCHSIZE]
-    s2 = training_sent2[batch * BATCHSIZE: (batch + 1) * BATCHSIZE]
-    ops1, oopl1, edgelex1 = convert_sentences(s1, allowed)
-    ops2, oopl2, edgelex2 = convert_sentences(s2, allowed)
+    offset = batch * BATCHSIZE
+    s1 = training_sent1[offset : offset+BATCHSIZE]
+    s2 = training_sent2[offset : offset+BATCHSIZE]
+    ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset)
+    ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset)
 
     pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
     pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
 
     batched_parses.append((pr1,pr2))
 
-
+print(f"Allowed edges: {num_edges_allowed}/{num_edges_considered} ({100.0*num_edges_allowed/num_edges_considered}%)")
 
 # set up model and optimizer
 model = MaillardSnliModel(hd, 100, 3, glove).to(device)
