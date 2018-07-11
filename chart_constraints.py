@@ -34,7 +34,10 @@ class BeginEndChartConstraints:
         # print(f"allowed({sentence_index}):")
         # print(f"start {start}/{len(self.bconst[sentence_index])}, end {end}/{len(self.econst[sentence_index])}")
 
-        assert end <= len(self.econst[sentence_index]), f"Requested end position {end} for sentence_index {sentence_index}, but len is only {len(self.econst[sentence_index])}"
+        if end > len(self.econst[sentence_index]):
+            # This can occasionally happen, because of mismatch between Stanford and NLTK tokenizer
+            print(f"WARNING: Requested end position {end} for sentence_index {sentence_index}, but len is only {len(self.econst[sentence_index])}")
+            return False
 
         end_allowed = True if end == len(self.econst[sentence_index]) else self.econst[sentence_index][end]
 
