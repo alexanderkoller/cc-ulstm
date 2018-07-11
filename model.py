@@ -82,6 +82,11 @@ class SequentialChart(Module):
 
         self.unk_embedding = Parameter(torch.zeros((self.embedding_dim,), requires_grad=True))
 
+        V = len(glove.vectors)
+        self.word_embeddings = torch.zeros((V, self.embedding_dim))
+        for wordid in range(V):
+            self.word_embeddings[wordid,:] = glove.vectors[wordid]
+
         for p in (self.W, self.U, self.energy_u, self.unk_embedding):
             torch.nn.init.uniform_(p)
 
@@ -108,17 +113,19 @@ class SequentialChart(Module):
     def chart_for_batch(self, sentences, word_embeddings, original_opseq_lengths, max_sentence_length):
         bs = len(sentences)
         device = self._get_device()
-        chart = torch.zeros(bs, max_sentence_length + max(original_opseq_lengths), 2 * self.hidden_dim)
+        chart = torch.zeros(bs, max_sentence_length + max(original_opseq_lengths), 2 * self.hidden_dim, device=device)
 
         for i in range(max_sentence_length):
-            preact = torch.zeros(bs, 1, 5 * self.hidden_dim)
+            preact = torch.zeros(bs, 1, 5 * self.hidden_dim, device=device)
             for b, sentence in enumerate(sentences):
                 if i >= len(sentence):
                     # no word at this position
-                    preact[b] = torch.zeros((1,5*self.hidden_dim)).to(device)
+                    preact[b] = torch.zeros((1,5*self.hidden_dim), device=device)
                 else:
                     wordid = sentence[i]
-                    emb = word_embeddings.vectors[wordid].to(device) if wordid >= 0 else self.unk_embedding  # (embdim)
+                    emb = self.word_embeddings[wordid] if wordid >= 0 else self.unk_embedding # (embdim)
+
+                    # emb = word_embeddings.vectors[wordid].to(device) if wordid >= 0 else self.unk_embedding  # (embdim)
                     preact[b] = self.W @ emb + self.b  # (5*hd), broadcast into (1, 5*hd)
 
             c,h = self.ch(preact, 0, 0) # 2x (bs, 1, hd)
@@ -140,7 +147,7 @@ class SequentialChart(Module):
         device = self._get_device()
 
         max_sentence_length = max(len(sentence) for sentence in sentences)
-        chart = self.chart_for_batch(sentences, self.glove, original_operations_lengths, max_sentence_length).to(device)
+        chart = self.chart_for_batch(sentences, self.glove, original_operations_lengths, max_sentence_length) #.to(device)
         start_index = max_sentence_length
 
         bs = chart.size()[0]
