@@ -1,5 +1,6 @@
 import csv
 import os
+import time
 
 import torch
 
@@ -25,8 +26,9 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # def get_data(train_file, batchsize, limit, sort, cc):
 batched_parses, training_labels, glove = data.get_data("data/snli_1.0/snli_1.0_train.jsonl", bs, LIMIT, True, "data/snli_1.0/cc")
 
+start_time = time.time()
 #def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, initial_temperature, show_zero_ops, experiment):
 final_mean_loss = train.train(batched_parses, training_labels, glove, device, bs, hd, lr, EPOCHS, TEMP, False, None)
+end_time = time.time()
 
-
-print(f"final loss; {final_mean_loss}")
+print(f"result: loss={final_mean_loss}, time={end_time-start_time}")
