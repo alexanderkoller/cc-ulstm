@@ -54,7 +54,7 @@ if COMET_API_KEY is not None:
         "learning_rate": args.lr,
         "device": str(device),
         "initial_temperature": args.init_temperature,
-        "hidden_dim": args.hidden_dimension,
+        "hidden_dim": args.hidden_dim,
         "limit": args.limit,
         "cc": args.cc,
         "sort": args.sort
