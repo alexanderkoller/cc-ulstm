@@ -36,7 +36,7 @@ parser.add_argument('--limit', default='100', type=int)
 parser.add_argument('--comet', default=None, type=str)
 parser.add_argument('--cc', default=None, type=str)
 parser.add_argument('--sort', action='store_true') # sort by length
-parser.add_argument('--init-temperature', default='1.0', type=float)
+# parser.add_argument('--init-temperature', default='1.0', type=float)
 
 args = parser.parse_args()
 
@@ -69,5 +69,5 @@ else:
 batched_parses, training_labels, glove = data.get_data("data/snli_1.0/snli_1.0_train.jsonl", args.bs, args.limit, args.sort, args.cc)
 
 #def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, initial_temperature, show_zero_ops, experiment):
-final_mean_loss = train.train(batched_parses, training_labels, glove, device, args.bs, args.hidden_dim, args.lr, args.epochs, args.init_temperature, args.show_zero_ops, experiment)
+final_mean_loss = train.train(batched_parses, training_labels, glove, device, args.bs, args.hidden_dim, args.lr, args.epochs, args.show_zero_ops, experiment)
 

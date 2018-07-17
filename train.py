@@ -7,14 +7,13 @@ from torch.optim import Adam
 from model import MaillardSnliModel
 
 
-def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, initial_temperature, show_zero_ops, experiment):
+def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, show_zero_ops, experiment):
     BATCHSIZE = batchsize
     NUM_EPOCHS = num_epochs
-    INITIAL_TEMPERATURE = initial_temperature
 
     # set up model and optimizer
     model = MaillardSnliModel(hd, 100, 3, glove, device).to(device)
-    model.init_temperature(INITIAL_TEMPERATURE)
+    model.set_inv_temperature(10.0)
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = Adam(model.parameters(), lr=lr)
 
@@ -60,6 +59,11 @@ def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num
             print(f"convert: {mid-start}, forward: {after_forward-mid}, backward: {end-after_forward}")
 
             del loss  # to free it up before next iteration
+
+
+            # update temperature
+            new_inv_temp = (float(epoch) + batch/len(batched_parses)) * 100.0 + 1.0 # from Maillard source code, not paper
+            model.set_inv_temperature(new_inv_temp)
 
         # sys.exit(0)
 

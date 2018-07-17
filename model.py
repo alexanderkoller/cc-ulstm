@@ -25,8 +25,8 @@ class SnliModel(Module):
 
         return internal2
 
-    def init_temperature(self, temp):
-        self.sentence_model.init_temperature(temp)
+    def set_inv_temperature(self, temp):
+        self.sentence_model.set_inv_temperature(temp)
 
 
 
@@ -64,8 +64,8 @@ class MaillardSnliModel(Module):
 
         return F.relu(Ac + a)
 
-    def init_temperature(self, temp):
-        self.sentence_model.init_temperature(temp)
+    def set_inv_temperature(self, temp):
+        self.sentence_model.set_inv_temperature(temp)
 
 class SequentialChart(Module):
     def __init__(self, hidden_dim, embedding_dim, glove, device):
@@ -96,8 +96,8 @@ class SequentialChart(Module):
         except:
             return "cpu" # Tensors on CPU apparently don't have get_device method.
 
-    def init_temperature(self, temp):
-        self.temperature = torch.tensor([temp]).to(self._get_device())
+    def set_inv_temperature(self, temp):
+        self.inv_temperature = torch.tensor([temp]).to(self._get_device())
 
     def ch(self, preact, ccL, ccR):
         i = F.sigmoid(preact[:, :, :self.hidden_dim])  # (bs, amb, hd)
@@ -189,7 +189,7 @@ class SequentialChart(Module):
             expanded_u = self.energy_u.expand((bs, amb, -1)) # (bs, amb, hd)
             e = F.cosine_similarity(expanded_u, h, dim=2)    # (bs, amb)
 
-            s = F.softmax(e/self.temperature[0], dim=1).view(bs,amb,1)      # (bs, amb, 1)
+            s = F.softmax(e * self.inv_temperature[0], dim=1).view(bs, amb, 1)      # (bs, amb, 1)
             combined_c = (s*c).sum(dim=1) # (bs, hd)
             combined_h = (s*h).sum(dim=1) # (bs, hd)
 
