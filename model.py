@@ -16,8 +16,8 @@ class SnliModel(Module):
         self.clayer2 = Linear(mlp_dim, 3)
 
     def forward(self, sentences1, operations1, oopl1, sentences2, operations2, oopl2):
-        s1 = self.sentence_model(sentences1, operations1, oopl1) # (bs, hd)
-        s2 = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
+        s1, _ = self.sentence_model(sentences1, operations1, oopl1) # (bs, hd)
+        s2, _ = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
         conc = torch.cat((s1, s2), dim=1) # (bs, 2*hd)
 
         internal1 = F.relu(self.clayer1(conc)) # (bs, mlp_dim)
@@ -25,8 +25,30 @@ class SnliModel(Module):
 
         return internal2
 
+    # def predict(self, sentences1, operations1, oopl1, sentences2, operations2, oopl2):
+    #     s1, chart1 = self.sentence_model(sentences1, operations1, oopl1)  # (bs, hd)
+    #     s2, chart2 = self.sentence_model(sentences2, operations2, oopl2)  # (bs, hd)
+    #     conc = torch.cat((s1, s2), dim=1)  # (bs, 2*hd)
+    #
+    #     internal1 = F.relu(self.clayer1(conc))  # (bs, mlp_dim)
+    #     internal2 = F.softmax(self.clayer2(internal1), dim=1)  # (bs, 3)
+    #
+    #     return internal2
+
     def set_inv_temperature(self, temp):
         self.sentence_model.set_inv_temperature(temp)
+
+    # def extract_best_trees(self, chart, oopl):
+    #     ret = []
+    #     bs = len(oopl)
+    #
+    #     for b in range(bs):
+    #
+    #
+    #
+    #
+    #     ret, chart = torch.stack(
+    #         [chart[b, original_operations_lengths[b] - 1, self.hidden_dim:] for b in range(bs)])  # (bs, hd)
 
 
 
@@ -48,8 +70,8 @@ class MaillardSnliModel(Module):
     def forward(self, sentences1, operations1, oopl1, sentences2, operations2, oopl2):
         # return F.relu(self.A@conc + self.a)
 
-        s1 = self.sentence_model(sentences1, operations1, oopl1) # (bs, hd)
-        s2 = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
+        s1, _ = self.sentence_model(sentences1, operations1, oopl1) # (bs, hd)
+        s2, _ = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
 
         u = (s1-s2)**2  # (bs,hd)
         v = s1.mul(s2)  # (bs,hd)
@@ -182,16 +204,24 @@ class SequentialChart(Module):
             mult = torch.bmm(UE, hh)        # (bs*amb, 5*hd, 1)
             mult = mult.view(bs, amb, 5*self.hidden_dim) # (bs, amb, 5*hd)
 
-            preact = mult + self.b    # (bs, amb, 5*hd)
-            c, h = self.ch(preact, ccL, ccR)
+            preact = mult + self.b               # (bs, amb, 5*hd)
+            c, h = self.ch(preact, ccL, ccR)     # both (bs,amb,hd)
 
             # combine decompositions of this item
             expanded_u = self.energy_u.expand((bs, amb, -1)) # (bs, amb, hd)
             e = F.cosine_similarity(expanded_u, h, dim=2)    # (bs, amb)
 
-            s = F.softmax(e * self.inv_temperature[0], dim=1).view(bs, amb, 1)      # (bs, amb, 1)
-            combined_c = (s*c).sum(dim=1) # (bs, hd)
-            combined_h = (s*h).sum(dim=1) # (bs, hd)
+            s = F.softmax(e * self.inv_temperature[0], dim=1)  # (bs, amb)    #### .view(bs, amb, 1)      # (bs, amb, 1)
+            # s = F.softmax(e * self.inv_temperature[0], dim=1).view(bs, amb, 1)      # (bs, amb, 1)
+
+            ### TODO -> remember backpointers here, using argmax on s
+
+            combined_c = torch.einsum("ij,ijl->il", [s, c])  # (bs, hd)
+            combined_h = torch.einsum("ij,ijl->il", [s, h])  # (bs, hd)
+
+
+            # combined_c = (s*c).sum(dim=1) # (bs, hd)
+            # combined_h = (s*h).sum(dim=1) # (bs, hd)
 
             # update chart
             chart[:, start_index+step, :self.hidden_dim] = combined_c
@@ -206,7 +236,7 @@ class SequentialChart(Module):
 
         # return a tensor with h for the final state of each sentence in the minibatch
         ret = torch.stack([chart[b, original_operations_lengths[b]-1, self.hidden_dim:] for b in range(bs)]) # (bs, hd)
-        return ret
+        return ret, chart
 
 
 
