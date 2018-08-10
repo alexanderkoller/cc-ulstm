@@ -101,6 +101,7 @@ def eval_dev(epoch, model, dev_batched_parses, dev_labels, glove):
         for batch in range(len(dev_batched_parses)):
             pr1, pr2 = dev_batched_parses[batch]
             bs = len(pr1.sentences)
+            print(f"max sentence len: {max(len(s) for s in pr1.sentences)}")
             predictions, trees1, trees2 = model.predict(pr1.sentences, pr1.ops, pr1.oopl, pr1.edgelex, pr2.sentences, pr2.ops, pr2.oopl, pr2.edgelex)
             gold_labels = dev_labels[batch * bs: (batch + 1) * bs]
 
@@ -116,6 +117,8 @@ def eval_dev(epoch, model, dev_batched_parses, dev_labels, glove):
             correct = [i for i in range(len(gold_labels)) if gold_labels[i] == predictions[i]]
             correct_labels += len(correct)
             total_labels += len(gold_labels)
+
+            del predictions
 
     return correct_labels/total_labels
 

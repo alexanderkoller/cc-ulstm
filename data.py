@@ -166,7 +166,7 @@ def word_lookup(words, glove):
 
 #     train_file = "data/snli_1.0/snli_1.0_train.jsonl"
 
-def get_data(train_file, batchsize, limit, sort, cc, glove=None, mode="training"):
+def get_data(train_file, batchsize, limit, maxlen, sort, cc, glove=None, mode="training"):
     if glove is None:
         glove = torchtext.vocab.GloVe(name='6B', dim=100)
 
@@ -197,15 +197,16 @@ def get_data(train_file, batchsize, limit, sort, cc, glove=None, mode="training"
             # print(f"len(sent1): {len(sentence1)}") # REMOVEME
             label = snli_label_dict[j["gold_label"]]
 
-            training_sent1.append(sentence1)
-            training_sent2.append(sentence2)
-            training_labels.append(label)
+            if len(sentence1) <= maxlen and len(sentence2) <= maxlen:
+                training_sent1.append(sentence1)
+                training_sent2.append(sentence2)
+                training_labels.append(label)
 
-            max_sentence1_length = max(max_sentence1_length, len(sentence1))
-            max_sentence2_length = max(max_sentence2_length, len(sentence2))
+                max_sentence1_length = max(max_sentence1_length, len(sentence1))
+                max_sentence2_length = max(max_sentence2_length, len(sentence2))
 
-            if len(training_labels) >= MAX_SENTENCES:
-                break
+                if len(training_labels) >= MAX_SENTENCES:
+                    break
 
     # if requested, sort inputs by length of sent1
     if sort:
