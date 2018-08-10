@@ -1,3 +1,5 @@
+import sys
+
 import nltk
 import json
 from collections import namedtuple
@@ -49,7 +51,10 @@ def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_
     global num_edges_considered
     global num_edges_allowed
 
+    original_sentence_index = original_index[sentence_index_offset + sentence_index]
+
     n = len(sentence)
+
     operations = []
     edge_lex = Lexicon()
 
@@ -61,12 +66,9 @@ def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_
     edge_lex.pad(maxlen)
 
     # build larger constituents, CKY-style
-    for width in range(2, n):  # 2 <= width <= n
-        for start in range(n - width):  # 0 <= start <= n-width
-            # print(f"\nItem: {start}-{start+width} of {n}")
+    for width in range(2, n+1):  # 2 <= width <= n
+        for start in range(n - width + 1):  # 0 <= start <= n-width
             num_edges_considered += 1
-
-            original_sentence_index = original_index[sentence_index_offset + sentence_index]
 
             if cc.is_edge_allowed(original_sentence_index, start, start + width):
                 num_edges_allowed += 1
@@ -88,7 +90,12 @@ def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_
                     item = (start, start + width)
                     id = edge_lex.add(item)
                     operations.append(ops)
-                    # print(f"Added ops for item {item} #{id}")
+
+    if not cc.is_edge_allowed(original_sentence_index, 0, n):
+        print(f"Warning: whole sentence {original_sentence_index} not allowed by chart constraints.")
+
+    if edge_lex.get_id((0,n)) is None:
+        print(f"Warning: Could not parse sentence {original_sentence_index}.")
 
     return operations, edge_lex
 
@@ -159,8 +166,9 @@ def word_lookup(words, glove):
 
 #     train_file = "data/snli_1.0/snli_1.0_train.jsonl"
 
-def get_data(train_file, batchsize, limit, sort, cc):
-    glove = torchtext.vocab.GloVe(name='6B', dim=100)
+def get_data(train_file, batchsize, limit, sort, cc, glove=None, mode="training"):
+    if glove is None:
+        glove = torchtext.vocab.GloVe(name='6B', dim=100)
 
     global num_edges_considered
     global num_edges_allowed
@@ -180,11 +188,13 @@ def get_data(train_file, batchsize, limit, sort, cc):
 
     snli_label_dict = {"neutral": 0, "contradiction": 1, "entailment": 2, "-": 0}  # TODO - I don't understand the "-" label, double-check it
 
+    print()
     with open(train_file) as f:
-        for line in tqdm(f, desc="Reading training sentences", total=get_num_lines(train_file)):
+        for line in tqdm(f, desc=f"Reading {mode} sentences", total=get_num_lines(train_file)):
             j = json.loads(line)
             sentence1 = word_lookup(tokenize(j["sentence1"]), glove)
             sentence2 = word_lookup(tokenize(j["sentence2"]), glove)
+            # print(f"len(sent1): {len(sentence1)}") # REMOVEME
             label = snli_label_dict[j["gold_label"]]
 
             training_sent1.append(sentence1)

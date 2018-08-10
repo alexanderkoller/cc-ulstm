@@ -36,7 +36,8 @@ class BeginEndChartConstraints:
 
         if end > len(self.econst[sentence_index]):
             # This can occasionally happen, because of mismatch between Stanford and NLTK tokenizer
-            print(f"WARNING: Requested end position {end} for sentence_index {sentence_index}, but len is only {len(self.econst[sentence_index])}")
+            # print(f"WARNING: Requested end position {end} for sentence_index {sentence_index}, but len is only {len(self.econst[sentence_index])}")
+            # TODO - put this back in
             return False
 
         end_allowed = True if end == len(self.econst[sentence_index]) else self.econst[sentence_index][end]

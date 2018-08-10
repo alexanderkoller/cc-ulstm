@@ -102,61 +102,63 @@ class MaillardSnliModel(Module):
     def forward(self, sentences1, operations1, oopl1, sentences2, operations2, oopl2):
         ret, _, _, _, _ = self._internal_forward(sentences1, operations1, oopl1, sentences2, operations2, oopl2)
         return ret
-        # bs = len(sentences1)
-        # assert bs == len(sentences2)
-        #
-        # # return F.relu(self.A@conc + self.a)
-        #
-        # #         # ret = torch.stack([chart[b, original_operations_lengths[b]-1, self.hidden_dim:] for b in range(bs)]) # (bs, hd)
-        # chart1, bp1 = self.sentence_model(sentences1, operations1, oopl1)
-        # s1 = torch.stack([chart1[b, oopl1[b]-1, self.hidden_dim:] for b in range(bs)]) # (bs, hd)
-        #
-        # chart2, bp2 = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
-        # s2 = torch.stack([chart2[b, oopl2[b] - 1, self.hidden_dim:] for b in range(bs)])  # (bs, hd)
-        #
-        # # s1, _, _ = self.sentence_model(sentences1, operations1, oopl1) # (bs, hd)
-        # # s2, _, _ = self.sentence_model(sentences2, operations2, oopl2) # (bs, hd)
-        #
-        # u = (s1-s2)**2  # (bs,hd)
-        # v = s1.mul(s2)  # (bs,hd)
-        #
-        # bs = u.shape[0]
-        #
-        # A = self.A.view(1,self.mlp_dim,4*self.hidden_dim).expand(bs,-1,-1) # (bs, mlpd, 4*hd)
-        # a = self.a.view(1,self.mlp_dim).expand(bs,-1)                      # (bs, mlpd)
-        #
-        # conc = torch.cat([u,v,s1,s2], dim=1) # (bs, 4*hd)
-        # Ac = torch.einsum("ijk,ik->ij", [A, conc])
-        #
-        # return F.relu(Ac + a)
 
     def set_inv_temperature(self, temp):
         self.sentence_model.set_inv_temperature(temp)
 
     # construct a tree for item #i in batch
-    def _make_tree(self, i, sentences, oopl, bp, max_sentence_length):
-        return self._make_node(oopl[i]-1, i, sentences, bp, max_sentence_length)
+    def _make_tree(self, i, sentences, oopl, bp, edgelex, max_sentence_length):
+        return self._make_node(max_sentence_length+oopl[i]-1, i, sentences, bp, edgelex, max_sentence_length)
 
     # construct the subtree for batch item #i starting at chart index #row
-    def _make_node(self, row, i, sentences, bp, max_sentence_length):
-        if row < max_sentence_length:
-            return Tree(sentences[i][row], [])   # word-id at position #row in sentence #i
-        else:
-            left_subtree = self._make_node(bp[i, row, 0], i, sentences, bp, max_sentence_length)
-            right_subtree = self._make_node(bp[i, row, 1], i, sentences, bp, max_sentence_length)
-            return Tree("*", [left_subtree, right_subtree])
+    def _make_node(self, row, i, sentences, bp, edgelex, max_sentence_length, indent=0):
+        indentation = " " * indent
+        # print(f"{indentation}make_node sent #{i}, row #{row}")
+        # print(f"{indentation}row item: {edgelex[i].get_value(row)}")
 
-    def predict(self, sentences1, operations1, oopl1, sentences2, operations2, oopl2):
+        ret = None
+
+        if row < max_sentence_length:
+            if row > len(sentences[i]):
+                # sentence is longer than expected, because of tokenizer errors
+                # TODO - check if this is correct
+                ret = Tree(-1, [])
+            else:
+                try:
+                    ret = Tree(sentences[i][row], [])   # word-id at position #row in sentence #i
+                except:
+                    # print(f"access {row} in #{i} of len {len(sentences[i])}: {sentences[i]}")
+                    sys.exit(0)
+        else:
+            left_subtree = self._make_node(bp[i, row, 0], i, sentences, bp, edgelex, max_sentence_length, indent=indent+3)
+            right_subtree = self._make_node(bp[i, row, 1], i, sentences, bp, edgelex, max_sentence_length, indent=indent+3)
+            ret = Tree("*", [left_subtree, right_subtree])
+
+        # print(f"{indentation}-> {ret}")
+        return ret
+
+    def predict(self, sentences1, operations1, oopl1, edgelex1, sentences2, operations2, oopl2, edgelex2):
         bs = len(sentences1)
 
         ret, chart1, bp1, chart2, bp2 = self._internal_forward(sentences1, operations1, oopl1, sentences2, operations2, oopl2)
         predictions = torch.argmax(ret, dim=1) # (bs) with predicted output classes for each item in batch
 
         max_sentence_length_1 = max(len(sentence) for sentence in sentences1)
-        trees1 = [self._make_tree(i, sentences1, oopl1, bp1, max_sentence_length_1) for i in range(bs)]
+
+        # for s in sentences1:
+        #     print(s)
+
+        # print(f"max sentlen1: {max_sentence_length_1}")
+        # print(f"sent1[0]: {sentences1[0]}")
+        # print(f"ops1[0]: {operations1[0]}")
+        # print(f"oopl1[0]: {oopl1[0]}")
+        trees1 = [self._make_tree(i, sentences1, oopl1, bp1, edgelex1, max_sentence_length_1) for i in range(bs)]
 
         max_sentence_length_2 = max(len(sentence) for sentence in sentences2)
-        trees2 = [self._make_tree(i, sentences2, oopl2, bp2, max_sentence_length_2) for i in range(bs)]
+        trees2 = [self._make_tree(i, sentences2, oopl2, bp2, edgelex2, max_sentence_length_2) for i in range(bs)]
+
+        # print(trees1)
+        # sys.exit(0)
 
         return predictions, trees1, trees2
 
@@ -277,9 +279,10 @@ class SequentialChart(Module):
 
             # TODO - reorganize operations when they are computed so this doesn't have to be done at a time-critical time
             ops_in_step = [list(itertools.chain.from_iterable(operations[b][step])) for b in range(bs)]
+            # print(f"ops in step: {ops_in_step}")
             indices = [[i]*len(ops) for i, ops in enumerate(ops_in_step)]
-            t_indices = torch.tensor(indices, dtype=torch.int64, device=device) # (bs, 2*amb)
-            chart_entries = chart[t_indices, ops_in_step, :]   # (bs, 2*amb, 2*hd)
+            t_ops_in_step = torch.tensor(ops_in_step, dtype=torch.int64, device=device) # (bs, 2*amb)
+            chart_entries = chart[indices, ops_in_step, :]   # (bs, 2*amb, 2*hd)
 
             assert chart_entries.size()[1] % 2 == 0
             amb = chart_entries.size()[1]//2                      # #decompositions of items in this step
@@ -306,27 +309,30 @@ class SequentialChart(Module):
 
             s = F.softmax(e * self.inv_temperature[0], dim=1)  # (bs, amb)
 
-
-            ### TODO -> remember backpointers here, using argmax on s
-
             combined_c = torch.einsum("ij,ijl->il", [s, c])  # (bs, hd)
             combined_h = torch.einsum("ij,ijl->il", [s, h])  # (bs, hd)
-
-
-            # combined_c = (s*c).sum(dim=1) # (bs, hd)
-            # combined_h = (s*h).sum(dim=1) # (bs, hd)
 
             # update chart
             chart[:, start_index+step, :self.hidden_dim] = combined_c
             chart[:, start_index+step, self.hidden_dim:] = combined_h
 
             # calculate backpointers
+            # print(f"t_ops: {t_ops_in_step}")
+
             selected_amb = torch.argmax(s, dim=1)  # (bs); for each item in batch, this is the local decomposition with the highest prob
+            # print(f"selected amb indices: {selected_amb}")
+
             left_amb = 2 * selected_amb  # (bs): index of left child in t_index
             right_amb = left_amb+1       # (bs): index of right child in t_index
             bs_indices = list(range(bs)) # (bs)
-            backpointers[:, start_index + step, 0] = t_indices[bs_indices, left_amb]   # (bs): backpointers to left children
-            backpointers[:, start_index + step, 1] = t_indices[bs_indices, right_amb]  # (bs): backpointers to right children
+
+            backpointers[:, start_index + step, 0] = t_ops_in_step[bs_indices, left_amb]   # (bs): backpointers to left children
+            backpointers[:, start_index + step, 1] = t_ops_in_step[bs_indices, right_amb]  # (bs): backpointers to right children
+
+            # print(f"left bp: {# backpointers[:, start_index + step, 0]}")
+            # print(f"right bp: {backpointers[:, start_index + step, 1]}")
+            # sys.exit(0)
+
 
             end = time.time()
             total_setup_time += (mid-start)

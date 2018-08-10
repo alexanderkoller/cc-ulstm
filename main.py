@@ -66,8 +66,8 @@ else:
 
 # def get_data(train_file, batchsize, limit, sort, cc):
 batched_parses, training_labels, glove = data.get_data("data/snli_1.0/snli_1.0_train.jsonl", args.bs, args.limit, args.sort, args.cc)
+dev_batched_parses, dev_labels, _ = data.get_data("data/snli_1.0/snli_1.0_dev.jsonl", args.bs, args.limit, args.sort, None, glove=glove, mode="dev") # TODO - use CC for dev sentences too
 
 #def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, initial_temperature, show_zero_ops, experiment):
-final_mean_loss = train.train(batched_parses, training_labels, glove, device, args.bs, args.hidden_dim, args.lr, args.epochs, args.show_zero_ops, experiment)
+final_mean_loss = train.train(batched_parses, training_labels, dev_batched_parses, dev_labels, glove, device, args.bs, args.hidden_dim, args.lr, args.epochs, args.show_zero_ops, experiment)
 
-## TODO - add dev_batched_parses, dev_labels after training_labels!
