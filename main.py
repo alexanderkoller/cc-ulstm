@@ -33,7 +33,7 @@ parser.add_argument('--hidden-dim', default='10', type=int)
 parser.add_argument('--lr', default='0.01', type=float)
 parser.add_argument('--show-zero-ops', action='store_true')
 parser.add_argument('--limit', default='100', type=int)
-parser.add_argument('--maxlen', default='20', type=int) # skip sentences longer than this
+parser.add_argument('--maxlen', default='1000', type=int) # skip sentences longer than this
 parser.add_argument('--comet', default=None, type=str)
 parser.add_argument('--cc', default=None, type=str)
 parser.add_argument('--sort', action='store_true') # sort by length

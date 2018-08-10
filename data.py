@@ -92,10 +92,12 @@ def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_
                     operations.append(ops)
 
     if not cc.is_edge_allowed(original_sentence_index, 0, n):
-        print(f"Warning: whole sentence {original_sentence_index} not allowed by chart constraints.")
+        with open("unparseable.txt", "a") as f:
+            print(f"Warning: whole sentence {original_sentence_index} not allowed by chart constraints.", file=f)
 
     if edge_lex.get_id((0,n)) is None:
-        print(f"Warning: Could not parse sentence {original_sentence_index}.")
+        with open("unparseable.txt", "a") as f:
+            print(f"Warning: Could not parse sentence {original_sentence_index}.", file=f)
 
     return operations, edge_lex
 
@@ -216,9 +218,15 @@ def get_data(train_file, batchsize, limit, maxlen, sort, cc, glove=None, mode="t
         srted = sorted(to_sort, key=lambda x: len(x[0]))  # TODO - try len(x[0])+len(x[1])
         training_sent1, training_sent2, training_labels, original_index = zip(*srted)
         # print(f"after: {[len(x) for x in training_sent1[:100]]}")
-        print("Done.")
+        print(f"Done, {len(training_sent1)}/{len(training_sent2)} sentences1.")
     else:
         original_index = list(range(len(training_sent1)))
+
+    assert len(training_sent1) == len(training_sent2)
+    assert len(training_labels) == len(training_sent1)
+    assert len(training_sent1) > 0
+
+    num_instances = len(training_sent1)
 
     # parse all the sentences once
     # (may need to do this for each batch, if it doesn't fit in memory)
@@ -239,20 +247,15 @@ def get_data(train_file, batchsize, limit, maxlen, sort, cc, glove=None, mode="t
     num_edges_allowed = 0
     # num_pads = 0
 
-    num_batches = int(MAX_SENTENCES/batchsize)
+    num_batches = int(num_instances/batchsize)
+
+    with open("unparseable.txt", "w") as f:
+        print("--start--", file=f)
 
     for batch in tqdm(range(num_batches), desc="Parsing all sentences"):
         offset = batch * batchsize
         s1 = training_sent1[offset : offset+batchsize]
         s2 = training_sent2[offset : offset+batchsize]
-
-        # lens = [len(s) for s in s1]
-        # min_len = min(lens)
-        # num_pads += sum([l-min_len for l in lens])
-        #
-        # lens = [len(s) for s in s2]
-        # min_len = min(lens)
-        # num_pads += sum([l - min_len for l in lens])
 
         ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index)
         ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index)
