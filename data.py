@@ -47,7 +47,7 @@ class Lexicon:
     def __repr__(self):
         return str(self)
 
-def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_index):
+def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_index, warnings):
     global num_edges_considered
     global num_edges_allowed
 
@@ -92,12 +92,10 @@ def parse(sentence, sentence_index, maxlen, cc, sentence_index_offset, original_
                     operations.append(ops)
 
     if not cc.is_edge_allowed(original_sentence_index, 0, n):
-        with open("unparseable.txt", "a") as f:
-            print(f"Warning: whole sentence {original_sentence_index} not allowed by chart constraints.", file=f)
+        warnings.append(f"Warning: whole sentence {original_sentence_index} not allowed by chart constraints.")
 
     if edge_lex.get_id((0,n)) is None:
-        with open("unparseable.txt", "a") as f:
-            print(f"Warning: Could not parse sentence {original_sentence_index}.", file=f)
+        warnings.append(f"Warning: Could not parse sentence {original_sentence_index}.")
 
     return operations, edge_lex
 
@@ -125,7 +123,7 @@ def pad_operations(all_operations, max_ops_length):
         for i in range(num_sentences):
             pad_list(all_operations[i][pos], maxlen, (0, 0))
 
-def convert_sentences(sentences, cc, sentence_index_offset, original_index):
+def convert_sentences(sentences, cc, sentence_index_offset, original_index, warnings):
     # sentences: list(list(int)); len(sentences) = bs; len(sentences[0]) = length of first sentence; sentences[i][j] = id of j-th word in i-th sentence
     # cc: object with chart constraints; cc.is_edge_allowed(i,j,k) = True iff edge from j-k in i is allowed
     # sentence_index_offset: offset of first sentence in this batch in the global list of sentences (for determining chart constraints)
@@ -133,7 +131,7 @@ def convert_sentences(sentences, cc, sentence_index_offset, original_index):
 
     max_sentence_length = max([len(sent) for sent in sentences])
     bs = len(sentences)
-    parses = [parse(sent, sent_index, max_sentence_length, cc, sentence_index_offset, original_index) for
+    parses = [parse(sent, sent_index, max_sentence_length, cc, sentence_index_offset, original_index, warnings) for
               sent_index, sent in enumerate(sentences)]
     all_operations, all_edgelex = zip(*parses)
 
@@ -249,16 +247,15 @@ def get_data(train_file, batchsize, limit, maxlen, sort, cc, glove=None, mode="t
 
     num_batches = int(num_instances/batchsize)
 
-    with open("unparseable.txt", "w") as f:
-        print("--start--", file=f)
+    warnings = []
 
     for batch in tqdm(range(num_batches), desc="Parsing all sentences"):
         offset = batch * batchsize
         s1 = training_sent1[offset : offset+batchsize]
         s2 = training_sent2[offset : offset+batchsize]
 
-        ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index)
-        ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index)
+        ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index, warnings)
+        ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index, warnings)
 
         pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
         pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
@@ -269,13 +266,17 @@ def get_data(train_file, batchsize, limit, maxlen, sort, cc, glove=None, mode="t
         offset = num_batches * batchsize
         s1 = training_sent1[offset: MAX_SENTENCES]
         s2 = training_sent2[offset: MAX_SENTENCES]
-        ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index)
-        ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index)
+        ops1, oopl1, edgelex1 = convert_sentences(s1, cc_sent1, offset, original_index, warnings)
+        ops2, oopl2, edgelex2 = convert_sentences(s2, cc_sent2, offset, original_index, warnings)
 
         pr1 = ParsingResult(sentences=s1, ops=ops1, oopl=oopl1, edgelex=edgelex1)
         pr2 = ParsingResult(sentences=s2, ops=ops2, oopl=oopl2, edgelex=edgelex2)
 
         batched_parses.append((pr1, pr2))
+
+    with open("unparseable.txt", "w") as f:
+        for w in warnings:
+            print(w, file=f)
 
     print(f"Allowed edges: {num_edges_allowed}/{num_edges_considered} ({100.0*num_edges_allowed/num_edges_considered}%)")
     # print(f"Padding: {num_pads}")
