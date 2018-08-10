@@ -2,12 +2,13 @@ import time
 
 import torch
 import torchtext
+from nltk.tree import Tree
 from torch.optim import Adam
 
 from model import MaillardSnliModel
 
 
-def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, show_zero_ops, experiment):
+def train(batched_parses, training_labels, dev_batched_parses, dev_labels, glove, device, batchsize, hd, lr, num_epochs, show_zero_ops, experiment):
     BATCHSIZE = batchsize
     NUM_EPOCHS = num_epochs
 
@@ -70,7 +71,44 @@ def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num
         mean_loss = total_loss/len(batched_parses)
         print(f"\n\n=== mean loss after epoch {epoch}: {mean_loss} ===\n")
 
+        dev_accuracy = eval_dev(model, dev_batched_parses, dev_labels, glove)
+        sys.exit(0)
+
         if experiment is not None:
             experiment.log_metric("loss", mean_loss, step=epoch + 1)
 
     return mean_loss
+
+
+
+def eval_dev(model, dev_batched_parses, dev_labels, glove):
+    correct_labels = 0
+    total_labels = 0
+
+    for batch in range(len(dev_batched_parses)):
+        pr1, pr2 = dev_batched_parses[batch]
+        bs = len(pr1.sentences)
+        predictions, trees1, trees2 = model.predict(pr1.sentences, pr1.ops, pr1.oopl, pr2.sentences, pr2.ops, pr2.oopl)
+
+        for i in range(bs):
+            print(decode_tree(trees1[i], glove))
+
+
+def map(tree, fn):
+    mapped_children = [map(tree[i], fn) for i in range(len(tree))]
+    mapped_label = fn(tree.label())
+    new_label = tree.label() if mapped_label is None else mapped_label
+    return Tree(new_label, mapped_children)
+
+
+def decode_tree(tree, glove):
+    def lookup(word_id):
+        if type(word_id) is int:
+            if word_id < len(glove.itos):
+                return glove.itos[word_id]
+            else:
+                return "*UNK*"
+        else:
+            return None
+
+    return map(tree, lookup)

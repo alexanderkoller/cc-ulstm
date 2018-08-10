@@ -19,7 +19,7 @@ from tqdm import tqdm
 import data
 import train
 from chart_constraints import AllAllowedChartConstraints, BeginEndChartConstraints
-from model import SequentialChart, SnliModel, MaillardSnliModel
+from model import SequentialChart, MaillardSnliModel
 from util import get_num_lines
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -70,3 +70,4 @@ batched_parses, training_labels, glove = data.get_data("data/snli_1.0/snli_1.0_t
 #def train(batched_parses, training_labels, glove, device, batchsize, hd, lr, num_epochs, initial_temperature, show_zero_ops, experiment):
 final_mean_loss = train.train(batched_parses, training_labels, glove, device, args.bs, args.hidden_dim, args.lr, args.epochs, args.show_zero_ops, experiment)
 
+## TODO - add dev_batched_parses, dev_labels after training_labels!
